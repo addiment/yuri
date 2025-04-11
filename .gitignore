@@ -1,0 +1,9 @@
+/target
+# JetBrains told me to screw off when I told them RustRover wasn't working :/
+# Honestly, I think they're wrong- RR is the only app on my entire computer that has this type of behavior.
+# But regardless, unless I want to
+**/replay_pid*.log
+
+**/*.spv
+**/*.spvasm
+**/*.rdc
