@@ -2,7 +2,7 @@
 
 i am contributing to the problem.
 
-![](yuri.jpg)
+![](docs/yuri.jpg)
 
 # FAQ
 
@@ -12,7 +12,7 @@ too many shader languages. they all suck.
 the solution is to stop using shader languages
 and just port a general-purpose language to a spir-v target
 
-![](miku_2.png)
+![](docs/miku_2.png)
 
 ## What are you doing about it
 
@@ -23,13 +23,13 @@ why have complex shader when can have simple shader?
 
 ...and I'm too stupid to contribute
 
-![](miku_3.png)
+![](docs/miku_3.png)
 
 ## Why the hell would you do that
 
 anger. spite. stupid? stupid.
 
-![](miku.png)
+![](docs/miku.png)
 
 ## Why did you call it "yuri"
 
@@ -58,7 +58,12 @@ Compute would be the most likely, but with what I do, geometry/tesselation
 is probably not happening.
 
 Simple fragment and vertex shaders have simple outputs;
-fragment shaders output color, vertex shaders output position.
+fragment shaders output color, vertex shaders output position
+(as well as whatever else you want them to).
+
+### Modules
+
+A 
 
 ### Fragment Shaders
 
@@ -84,8 +89,11 @@ Yuri is statically typed. It does not have as many types as GLSL or HLSL,
 and certainly doesn't have as many as SPIR-V. No weird matrices, no half-floats.
 
 - boolean
-  - `bool`
-- unit (but it doesn't really exist)
+  - `bool` or `b`?
+- unit
+  - can't be stored in a variable
+  - can't be passed as an argument to a function
+  - the same rules apply to arrays of units (including nesting them)
 - scalar types:
   - signed/unsigned integers, two's complement 32 bits etc.
     - `i`/`u`
@@ -95,7 +103,7 @@ and certainly doesn't have as many as SPIR-V. No weird matrices, no half-floats.
 - 2/3/4 component vectors of the scalar types
   - TN (`u2`, `i3`, `f4`)
 - arrays (fixed-size)
-  - T\[N\] (`[f4: 4]`)
+  - T\[N\] (`f4[4][f4: 4]`)
 - square matrices
   - mN (`m2`, `m3`, `m4`)
 - functions are NOT types. sorry
@@ -135,11 +143,13 @@ we use `let` (immutable, possibly at compile-time) and `var` (mutable).
   - we just re-order assignment and evaluation at the assembly level
 - switch expression
   - spv has it natively
-- `loop`/`fold`/`map`
+- `loop`/`fold`/`map`/`filter`
   - I would like the entire language to be immutable,
     so ideally we can initialize arrays in a granular way
-  - spread: a loop with an expression as the tail,
-    initialize an array with the iteration count
+  - `loop`: a loop with an expression as the tail,
+    initialize an array with the iteration count.
+    - This also works as a for/while loop; array of unit becomes unit
+  - `filter`
 
 ```yuri
 # [ 0, 1, 2, 3 ];
@@ -148,8 +158,10 @@ let arr: u[4] = loop 4 {
 };
 ```
 
-- `if` statement/expression
+- `if` expression
   - `if ([COND]) {}`, `if ([COND]) {} else {}`
+- match expression
+  - just a switch statement, ideally nothing fancy
 
 # Usage
 

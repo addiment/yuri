@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
 /// Represents a generic error that occurred while trying to compile a Yuri shader.
+#[derive(Eq, PartialEq)]
 pub enum YuriCompileError {
 	Parse(YuriParseError),
 	Semantic(YuriSemanticError)
@@ -47,7 +48,7 @@ impl From<YuriSemanticError> for YuriCompileError {
 }
 
 /// Represents an error that occurred while processing the logical aspects of a Yuri syntax tree.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum YuriSemanticError {
 }
 
@@ -61,9 +62,20 @@ impl Display for YuriSemanticError {
 impl Error for YuriSemanticError {}
 
 /// Represents an error that occurred while parsing the Yuri shader syntax from string input.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum YuriParseError {
-	Unknown
+	/// Mostly a placeholder value,
+	/// should rarely come up in practice.
+	/// Generated when we have literally NO idea what your code is trying to do.
+	Unknown,
+	/// Generated when the parser bugs out.
+	/// It's hard to detect things like that,
+	/// but we have some basic measures in place.
+	ParserBug {
+		explanation: String,
+	},
+	InvalidVariableDeclaration,
+	UnexpectedEndOfFile
 }
 
 impl Display for YuriParseError {

@@ -1,3 +1,11 @@
+# Dear Yuri fans,
+# I have no idea how Nix or Nixos works.
+# Do you want to know how I make new projects??
+# I copy the same flake into every project I work on and just change the name.
+# This file has a FAMILY HISTORY.
+# But if it sucks, feel free to make a PR to improve it!
+# I'm not really a Nix girl, I'm just stuck in this terrible ecosystem.
+
 {
   description = "yuri";
 

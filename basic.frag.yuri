@@ -1,0 +1,20 @@
+import my_custom_module;
+
+# Line Comment
+## block comment? ## 
+
+prop time: f;
+
+let asda = [];
+
+export fn do_something(): f {
+	123
+}
+
+fn @vert vert_main(position: f2, tex_coord: f3, vertex_color: f4): <| position: f4, tex_coord: f3 |> {
+
+}
+
+fn @frag frag_main(tex_coord: f3) -> f4 {
+
+}

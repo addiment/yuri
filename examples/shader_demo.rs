@@ -651,7 +651,7 @@ fn main() {
     colog::basic_builder().filter_level(LevelFilter::Trace).init();
 
 	let frag_source = fs::read("yuri.frag.spv").unwrap();
-	let vert_source = fs::read("minimal.vert.spv").unwrap();
+	let vert_source = fs::read("../minimal.vert.spvasm").unwrap();
 
     let mut app = App::new(&vert_source, &frag_source);
 

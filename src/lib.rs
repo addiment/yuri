@@ -1,28 +1,27 @@
 use crate::error::{YuriCompileError, YuriParseError, YuriSemanticError};
+use crate::parser::ShaderModule;
 
 pub mod error;
 mod codegen;
+mod parser;
 
 pub struct YuriShader {
     
 }
 
-#[derive(Debug)]
-pub struct YuriAst {
-
-}
-
 impl YuriShader {
+    /// Wrapper around the [YuriShader::parse] and [YuriShader::compile] methods,
+    /// chaining them together in the simplest possible way.
     pub fn new(input: &str) -> Result<Self, YuriCompileError> {
         let ast = Self::parse(input)?;
         Ok(Self::compile(&ast)?)
     }
 
-    pub fn parse(input: &str) -> Result<YuriAst, YuriParseError> {
-        Ok(YuriAst{})
+    pub fn parse(input: &str) -> Result<ShaderModule, YuriParseError> {
+        parser::parse(input)
     }
 
-    pub fn compile(ast: &YuriAst) -> Result<Self, YuriSemanticError> {
+    pub fn compile(ast: &ShaderModule) -> Result<Self, YuriSemanticError> {
         Ok(Self{})
     }
 }
