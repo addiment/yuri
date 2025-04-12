@@ -71,10 +71,8 @@ pub enum YuriParseError {
 	/// Generated when the parser bugs out.
 	/// It's hard to detect things like that,
 	/// but we have some basic measures in place.
-	ParserBug {
-		explanation: String,
-	},
-	InvalidVariableDeclaration,
+	ParserBug(String),
+	InvalidVariableDeclaration(String),
 	UnexpectedEndOfFile
 }
 

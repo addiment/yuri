@@ -143,14 +143,14 @@ pub fn parse(input: &str) -> Result<ShaderModule, YuriParseError> {
 	let mut last_seek = usize::MAX;
 	while seek < chars.len() {
 		if seek == last_seek {
-			return Err(YuriParseError::ParserBug {
-				explanation: format!(concat!(
+			return Err(YuriParseError::ParserBug(
+				format!(concat!(
 					"The parser got stuck while parsing a token, ",
 					"and can no longer complete. For developers: ",
 					"make sure that the input seek is set correctly! ",
 					"The current seek is {}"
 				), seek)
-			})
+			));
 		}
 		last_seek = seek;
 		state.parse_outer(&chars, &mut seek)?;
@@ -159,7 +159,11 @@ pub fn parse(input: &str) -> Result<ShaderModule, YuriParseError> {
 	Ok(state)
 }
 
-type Input<'a> = &'a Vec<char>;
+type Input<'a> = &'a[char];
+
+fn seek_slice(input: Input, n: usize) -> Option<Input> {
+	input.get(n..input.len())
+}
 
 impl ShaderModule {
 	/// Moves the seek forward until it hits a non-whitespace token.
@@ -268,7 +272,7 @@ impl ShaderModule {
 	/// - a global property (aka. uniform)
 	/// - a global variable (constant)
 	fn parse_outer(&mut self, input: Input, seek: &mut usize) -> Result<(), YuriParseError> {
-
+		Self::take_whitespace(input, seek, true)?;
 
 		// let function_decl = self.parse_function_declaration(input, seek);
 		// let variable_decl = self.parse_function_declaration(input, seek);
@@ -278,31 +282,56 @@ impl ShaderModule {
 	// fn parse_function_declaration(input: Input, seek: &mut usize) -> Result<FunctionDeclaration, YuriParseError> {
 	//
 	// }
-	//
-	fn parse_variable_declaration(input: Input, mut seek: usize) -> Result<VariableDeclaration, YuriParseError> {
-		Self::take_whitespace(input, &mut seek, true)?;
+
+	fn parse_type(input: Input, mut seek: usize) -> Result<(usize, YuriType), YuriParseError> {
+	}
+
+	fn parse_variable_declaration(input: Input, mut seek: usize) -> Result<(usize, VariableDeclaration), YuriParseError> {
 		let is_exported = if input[seek] == 'e' {
 			// make sure the keyword matches
 			let keyword: Box<[char]> = "export".chars().collect();
-			if *keyword == input[seek..(seek + keyword.len())] {
+			// compare the next few characters, and fail if we get EOF.
+			let actual = if let Some(a) = input
+				.get(seek..(seek + keyword.len())) {
+				a
+			} else {
+				return Err(YuriParseError::UnexpectedEndOfFile);
+			};
+			if *keyword == *actual {
 				// if we get to this
 				seek += keyword.len();
 				Self::take_whitespace(input, &mut seek, true)?
 			} else {
 				// if your variable declaration doesn't start with "let" or "export," it's invalid.
-				return Err(YuriParseError::InvalidVariableDeclaration)
+				return Err(YuriParseError::InvalidVariableDeclaration(
+					format!("Unexpected character {}, did you mean \"export\"?", actual[0])
+				));
 			}
 		} else {
 			false
 		};
 		Self::take_whitespace(input, &mut seek, true)?;
-		Ok(VariableDeclaration {
-			name: "".to_string(),
-			explicit_type: None,
-			inferred_type: None,
-			value: Expression::Variable(String::from("TODO")),
-			exported: is_exported
-		})
+		let next = if let Some(ch) = input.get(seek) {
+			seek += 1;
+			*ch
+		} else {
+			return Err(YuriParseError::UnexpectedEndOfFile);
+		};
+		let explicit_type = if next == ':' {
+			Self::take_whitespace(input, &mut seek, true)?;
+		} else {
+			None
+		};
+		Ok((
+			seek,
+			VariableDeclaration {
+				name: "".to_string(),
+				explicit_type: None,
+				inferred_type: None,
+				value: (),
+				exported: false,
+			}
+		))
 	}
 }
 
