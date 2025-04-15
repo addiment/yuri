@@ -7,6 +7,10 @@ edition = "2024"
 colog = "1.3.0"
 log = "0.4.27"
 sdl3-sys = "0.4.7"
+rand = "0.9.0"
+
+[build-dependencies]
+rand = "0.9.0"
 
 [dependencies]
 rspirv = "0.12.0"

@@ -1,4 +1,5 @@
-use std::ops::Range;
+use std::num::ParseFloatError;
+use std::ops::{Neg, Range};
 use crate::error::YuriParseError;
 // our grammar:
 // Unsigned = any unsigned integer literal
@@ -339,6 +340,7 @@ pub enum YuriTokenType {
 	DecimalNumber(f32),
 
 	Keyword(Keyword),
+	Annotation(String),
 	Identifier(String),
 	Operator(String),
 }
@@ -381,6 +383,10 @@ fn get_or_eof(input: Input, seek: usize) -> Result<char, YuriParseError> {
 	}
 }
 
+
+/// This function is an affront to god. But so are lesbians, so it doesn't really matter.
+/// I am afraid to split this up into multiple other functions because
+/// of how the pieces all fit together. I totally could, but it's fine like this.
 fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseError> {
 	let initial_seek = *seek;
 	let tt = match input[*seek] {
@@ -399,7 +405,6 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 		'^' => { *seek += 1; YuriTokenType::Operator(String::from("^")) }
 		'!' => { *seek += 1; YuriTokenType::Operator(String::from("!")) }
 
-		// need to lookahead
 		'|' => {
 			*seek += 1;
 			match input.get(*seek) {
@@ -541,6 +546,7 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 				if ch == '-' {
 					*seek += 1;
 				}
+				let number_start_seek = *seek;
 				// parse digits
 				while let Some(ch) = input.get(*seek) {
 					if *ch == '_' {
@@ -567,19 +573,22 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 					return Err(YuriParseError::InvalidDigit);
 				}
 
-				if let Some(decimal_point) = decimal_point {
-					let mut sum: f32 = 0.0;
-					for i in 0..digits.len() {
-						let exp = decimal_point as i32 - (i as i32) - 1;
-						let digit_at = digits[i];
-						if digit_at != 0 {
-							sum += digit_at as f32 * 10_f32.powi(exp);
+				if let Some(_) = decimal_point {
+					let strung = input[number_start_seek..*seek]
+						.iter()
+						.collect::<String>();
+					match strung
+						.parse::<f32>() {
+						Ok(num) => YuriTokenType::DecimalNumber(if ch == '-' {
+							println!("float: {strung}");
+							num.neg()
+						} else {
+							num
+						}),
+						Err(_) => {
+							return Err(YuriParseError::NumberOutOfBounds);
 						}
 					}
-					if ch == '-' {
-						sum *= -1.0;
-					}
-					YuriTokenType::DecimalNumber(sum)
 				} else {
 					let mut sum: i64 = 0;
 					for i in 0..digits.len() {
@@ -608,22 +617,36 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 		}
 		ch => {
 			// YuriToken::Unknown
-			let mut ident = Vec::new();
-			if ch.is_alphabetic() || ch == '_' {
-				while let Some(ch) = input.get(*seek) {
-					if ch.is_alphanumeric() || *ch == '_' {
-						ident.push(*ch);
-						*seek += 1;
-					} else {
-						break;
+			fn take_ident(input: Input, seek: &mut usize) -> Option<String> {
+				let ch = *input.get(*seek)?;
+				if ch.is_alphabetic() || ch == '_' {
+					let mut ident = Vec::new();
+					while let Some(ch) = input.get(*seek) {
+						if ch.is_alphanumeric() || *ch == '_' || *ch == '.' {
+							ident.push(*ch);
+							*seek += 1;
+						} else {
+							break;
+						}
 					}
+					Some(ident.into_iter().collect())
+				} else {
+					None
 				}
-				let ident_str: String = ident.into_iter().collect();
+			}
 
-				if let Some(kw) = Keyword::string_to_keyword(&ident_str) {
+			if ch == '@' {
+				*seek += 1;
+				let annotation = take_ident(input, seek);
+				if annotation.is_none() {
+					return Err(YuriParseError::IncompleteAnnotation);
+				}
+				YuriTokenType::Annotation(annotation.unwrap())
+			} else if let Some(ident) = take_ident(input, seek) {
+				if let Some(kw) = Keyword::string_to_keyword(&ident) {
 					YuriTokenType::Keyword(kw)
 				} else {
-					YuriTokenType::Identifier(ident_str)
+					YuriTokenType::Identifier(ident)
 				}
 			} else {
 				*seek += 1;
@@ -748,7 +771,7 @@ fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<u
 #[cfg(test)]
 mod test {
 	use crate::error::YuriParseError;
-	use crate::parser::{take_whitespace, Keyword, YuriToken, YuriTokenType};
+	use crate::parser::{take_whitespace, YuriTokenType};
 	use crate::YuriShader;
 
 	fn cvc(s: &str) -> Vec<char> {
@@ -756,34 +779,21 @@ mod test {
 	}
 
 	#[test]
-	fn verify_lexer() {
-		let input = "##
-
-Basic hybrid vertex/fragment shader, written in Yuri.
-
-##
-
-prop time: f;
-prop transform: m4;
-
-let global: f = 123;
-
-@vert
-fn my_vert_main(pos: f3, coord: f2): <| @vert.pos out: f4, pos: f3, coord: f2 |> {
-    # shorthand            ___here___
-    <| out = f4(pos, 1.0) * transform, pos, coord |>
-}
-
-@frag
-export fn my_frag_main(pos: f3, coord: f2): f4 {
-    f4(coord, 0.0, 1.0)
-}
-
-";
-		let expected = [
-			YuriToken::new(YuriTokenType::Keyword(Keyword::Prop), 63..67)
-		];
-		let actual =YuriShader::lex(input).unwrap();
+	fn lex_numbers() {
+		for _ in 0..1_345_678 {
+			// TODO: numbers break when too big/small
+			let val = rand::random_range(-123456789.0f32..=123456789.0f32);
+			let vas = val.to_string();
+			let ast = YuriShader::lex(&vas).unwrap();
+			assert_eq!(ast.len(), 1);
+			let tt = &ast[0].token_type;
+			match tt {
+				YuriTokenType::DecimalNumber(n) => { assert_eq!(*n, val); }
+				YuriTokenType::SignedNumber(n) => { assert_eq!(*n as f32, val); }
+				YuriTokenType::UnsignedNumber(n) => { assert_eq!(*n as f32, val); }
+				_ => unreachable!("not decimal: {tt:?} (from {val})")
+			}
+		}
 	}
 
 	#[test]

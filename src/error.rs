@@ -73,6 +73,7 @@ pub enum YuriParseError {
 	InvalidDigit,
 	NumberOutOfBounds,
 	InvalidNumericLiteral,
+	IncompleteAnnotation,
 }
 
 impl Display for YuriParseError {
