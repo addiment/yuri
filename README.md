@@ -35,7 +35,16 @@ anger. spite. stupid? stupid.
 
 i like women
 
+# NOTE: everything after this point is out-of-date
+and probably wrong. look at the code (which I've tried to document as I go)
+for more info, as well as the \*.yuri files which serve as code samples.
+
 # Details
+
+we have a logo.
+
+![](docs/icon.svg)
+
 
 Yuri is inspired by lisp and lisp-like languages,
 because they are easy to write parsers for.
