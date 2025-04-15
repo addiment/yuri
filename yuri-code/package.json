@@ -1,0 +1,37 @@
+{
+	"name": "yuri",
+	"displayName": "The Yuri Shader Language",
+	"description": "asdjkadsfjkasdjasfdasdafsghj",
+	"version": "1.0.0",
+	"publisher": "addiment",
+	"license": "MIT",
+	"engines": {
+		"vscode": "0.10.x"
+	},
+	"icon": "icon.png",
+	"categories": ["Programming Languages"],
+	"contributes": {
+		"languages": [
+			{
+				"id": "yuri",
+				"aliases": [
+					"Yuri",
+					"yuri"
+				],
+				"extensions": [ ".yuri" ],
+				"mimetypes": [
+					"application/json",
+					"application/manifest+json"
+				],
+				"configuration": "./language-configuration.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "yuri",
+				"scopeName": "source.yuri",
+				"path": "./syntaxes/Yuri.tmLanguage.json"
+			}
+		]
+	}
+}

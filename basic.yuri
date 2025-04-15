@@ -1,0 +1,22 @@
+##
+
+Basic hybrid vertex/fragment shader, written in Yuri.
+
+##
+
+prop time: f;
+prop transform: m4;
+
+let global: f = 123;
+
+@vert
+fn my_vert_main(pos: f3, coord: f2): <| @vert.pos out: f4, pos: f3, coord: f2 |> {
+    # shorthand            ___here___
+    <| out = f4(pos, 1.0) * transform, pos, coord |>
+}
+
+@frag
+export fn my_frag_main(pos: f3, coord: f2): f4 {
+    f4(coord, 0.0, 1.0)
+}
+

@@ -68,12 +68,11 @@ pub enum YuriParseError {
 	/// should rarely come up in practice.
 	/// Generated when we have literally NO idea what your code is trying to do.
 	Unknown,
-	/// Generated when the parser bugs out.
-	/// It's hard to detect things like that,
-	/// but we have some basic measures in place.
-	ParserBug(String),
 	InvalidVariableDeclaration(String),
-	UnexpectedEndOfFile
+	UnexpectedEndOfFile,
+	InvalidDigit,
+	NumberOutOfBounds,
+	InvalidNumericLiteral,
 }
 
 impl Display for YuriParseError {

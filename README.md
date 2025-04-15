@@ -90,6 +90,8 @@ and certainly doesn't have as many as SPIR-V. No weird matrices, no half-floats.
 
 - boolean
   - `bool` or `b`?
+- `sampler`
+  - don't want to abbreviate this
 - unit
   - can't be stored in a variable
   - can't be passed as an argument to a function
@@ -103,9 +105,13 @@ and certainly doesn't have as many as SPIR-V. No weird matrices, no half-floats.
 - 2/3/4 component vectors of the scalar types
   - TN (`u2`, `i3`, `f4`)
 - arrays (fixed-size)
-  - T\[N\] (`f4[4][f4: 4]`)
+  - T\[N\] (C-style array)
 - square matrices
   - mN (`m2`, `m3`, `m4`)
+  - not sure how to do literals for this.
+    - highjack complex type literals?
+    - what if you just use function syntax?
+      - constructor functions would definitely simplify scalar primitives
 - functions are NOT types. sorry
 
 ## Functions
@@ -114,11 +120,8 @@ Functions are NOT first-class data.
 
 ## Variables
 
-we use `let` (immutable, possibly at compile-time) and `var` (mutable).
-`let` is the same as `const` in other languages.
-`var` is the same as `let mut` in Rust.
-
-- top-level `var` is not allowed, but top-level `let` is.
+all variables are immutable, and are declared with `let`.
+Type annotations are optional.
 
 ## Operators
 
@@ -148,7 +151,6 @@ we use `let` (immutable, possibly at compile-time) and `var` (mutable).
     so ideally we can initialize arrays in a granular way
   - `loop`: a loop with an expression as the tail,
     initialize an array with the iteration count.
-    - This also works as a for/while loop; array of unit becomes unit
   - `filter`
 
 ```yuri
