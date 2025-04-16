@@ -35,9 +35,13 @@ fn main() -> ExitCode {
 	println!("AST:\n{ast_string}");
 	println!("errors:\n{ast_string_errors}");
 
-	let shader = YuriShader::parse(&ast)
+	let module = YuriShader::parse(&ast)
 		.unwrap();
 
+	println!("module:\n{module:?}");
+
+	let _shader = YuriShader::compile(&module)
+		.unwrap();
 
 	ExitCode::SUCCESS
 }

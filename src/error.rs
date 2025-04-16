@@ -48,9 +48,17 @@ impl From<YuriSemanticError> for YuriCompileError {
 	}
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum YuriSemanticErrorType {
+	UnexpectedToken	
+}
+
 /// Represents an error that occurred while processing the logical aspects of a Yuri syntax tree.
 #[derive(Debug, Eq, PartialEq)]
-pub enum YuriSemanticError {
+pub struct YuriSemanticError {
+	pub(crate) error_type: YuriSemanticErrorType,
+	pub(crate) description: Option<String>,
+	pub(crate) markers: Vec<Range<usize>>,
 }
 
 impl Display for YuriSemanticError {
@@ -64,12 +72,12 @@ impl Error for YuriSemanticError {}
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum YuriLexErrorType {
+	UnknownToken,
 	InvalidVariableDeclaration,
 	UnexpectedEndOfFile,
 	NumberOutOfBounds,
 	InvalidNumericLiteral,
 	IncompleteAnnotation,
-	UnknownToken,
 }
 
 /// Represents an error that occurred while parsing the Yuri shader syntax from string input.

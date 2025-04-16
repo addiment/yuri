@@ -14,16 +14,24 @@ pub enum Keyword {
 	Prop,
 
 	Loop,
+	Fold,
 	Map,
 	Filter,
+	Switch,
+	If,
+	Else,
+	Return,
 
 	Import,
 	Export,
 	Module,
 
-	Return,
 	/// Reserved
 	Core,
+	And,
+	Xor,
+	Or,
+	Nor,
 
 	TypeBool,
 	TypeF,
@@ -48,7 +56,7 @@ pub enum Keyword {
 }
 
 impl Keyword {
-	pub const ALL: [Keyword; 31] = { use Keyword::*; [
+	pub const ALL: [Keyword; 35] = { use Keyword::*; [
 		Fn,
 		Let,
 		Prop,
@@ -63,6 +71,10 @@ impl Keyword {
 
 		Return,
 		Core,
+		And,
+		Xor,
+		Or,
+		Nor,
 
 		TypeBool,
 		TypeF,
@@ -92,11 +104,19 @@ impl Keyword {
 			Keyword::Prop 			=> "prop",
 			Keyword::Loop 			=> "loop",
 			Keyword::Map 			=> "map",
+			Keyword::Fold 			=> "fold",
 			Keyword::Filter 		=> "filter",
 			Keyword::Import 		=> "import",
 			Keyword::Export 		=> "export",
 			Keyword::Module 		=> "module",
 			Keyword::Return 		=> "return",
+			Keyword::If 			=> "if",
+			Keyword::And 			=> "and",
+			Keyword::Xor 			=> "xor",
+			Keyword::Or 			=> "or",
+			Keyword::Nor 			=> "nor",
+			Keyword::Else	 		=> "else",
+			Keyword::Switch 		=> "switch",
 			Keyword::TypeBool 		=> "bool",
 			Keyword::TypeF 			=> "f",
 			Keyword::TypeU 			=> "u",
@@ -207,7 +227,6 @@ fn take_token(input: Input, seek: &mut usize) -> YuriToken {
 		':' => { *seek += 1; YuriTokenType::TypeHint },
 		';' => { *seek += 1; YuriTokenType::Terminator },
 		',' => { *seek += 1; YuriTokenType::Separator },
-		'*' => { *seek += 1; YuriTokenType::Operator(String::from("*")) }
 		'+' => { *seek += 1; YuriTokenType::Operator(String::from("+")) }
 		'/' => { *seek += 1; YuriTokenType::Operator(String::from("/")) }
 		'^' => { *seek += 1; YuriTokenType::Operator(String::from("^")) }
@@ -251,6 +270,13 @@ fn take_token(input: Input, seek: &mut usize) -> YuriToken {
 				None | Some(_) => YuriTokenType::Operator(String::from("&"))
 			}
 		},
+		'*' => {
+			*seek += 1;
+			match input.get(*seek) {
+				Some('*') => { *seek += 1; YuriTokenType::Operator(String::from("**")) }
+				None | Some(_) => YuriTokenType::Operator(String::from("*"))
+			}
+		}
 		'-' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
 			let earliest_seek = *seek;
 			// this control flow is really annoying to model without repetition.
@@ -540,13 +566,13 @@ fn take_token(input: Input, seek: &mut usize) -> YuriToken {
 pub(super) fn lex_input(input_string: &str) -> Result<YuriAst, YuriLexError> {
 	let mut ast = YuriAst::new();
 	let input: Vec<char> = input_string.chars().collect();
-	let mut seek = take_whitespace(&input, 0, false)?;
+	let mut seek = take_whitespace(&input, 0)?;
 	while seek < input.len() {
 		let tok = take_token(&input, &mut seek);
 		let tok = tok;
 		ast.push(tok);
 
-		seek = take_whitespace(&input, seek, false)?;
+		seek = take_whitespace(&input, seek)?;
 	}
 	Ok(ast)
 }
@@ -555,7 +581,7 @@ pub(super) fn lex_input(input_string: &str) -> Result<YuriAst, YuriLexError> {
 /// If the function encounters comments, it will treat them as whitespace.
 /// Block comments will generate a lex error if they are not terminated before EOF.
 /// Will return true if once it hits
-fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<usize, YuriLexError> {
+fn take_whitespace(input: Input, mut seek: usize) -> Result<usize, YuriLexError> {
 	while seek < input.len() {
 		let ch = input[seek];
 		if ch.is_whitespace() {
@@ -695,7 +721,7 @@ mod test {
 			println!("! testing \"{}\"", s.escape_default());
 			let input = cvc(s);
 			assert_eq!(
-				take_whitespace(&input, 0, false),
+				take_whitespace(&input, 0),
 				Ok(input.len()),
 				"input was \"{}\"", s.escape_default()
 			);
@@ -712,7 +738,7 @@ mod test {
 			println!("! testing \"{}\"", s.0);
 			let input = cvc(s.0);
 			assert_eq!(
-				take_whitespace(&input, 0, false),
+				take_whitespace(&input, 0),
 				Ok(s.1),
 				"input was \"{}\"", s.0.escape_default()
 			);
@@ -728,7 +754,7 @@ mod test {
 		] {
 			println!("! testing \"{}\"", s.escape_default());
 			let input = cvc(s);
-			let take = take_whitespace(&input, 0, false);
+			let take = take_whitespace(&input, 0);
 			assert_eq!(
 				take.unwrap_err().error_type,
 				YuriLexErrorType::UnexpectedEndOfFile,
@@ -740,7 +766,7 @@ mod test {
 		println!("testing \"{}\"", s.escape_default());
 		let input = cvc(s);
 		assert_eq!(
-			take_whitespace(&input, 0, false),
+			take_whitespace(&input, 0),
 			Ok(13),
 			"input was \"{}\"", s.escape_default()
 		);

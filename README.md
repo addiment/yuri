@@ -56,24 +56,6 @@ Usually my reasoning is "I did not want to implement that."
 Here's something you can't do in yuri: **you can't mutate variables.** at all. 
 this is a feature.
 
-## Program Structure
-
-I didn't like the rigid nature of GLSL, and HLSL scares me (microsoft),
-so I wanted to make sure that yuri supported modular programs.
-
-Yuri only supports 2 shader stages, vertex and fragment.
-I will implement the others if I ever need them, which is unlikely.
-Compute would be the most likely, but with what I do, geometry/tesselation
-is probably not happening.
-
-Simple fragment and vertex shaders have simple outputs;
-fragment shaders output color, vertex shaders output position
-(as well as whatever else you want them to).
-
-### Modules
-
-A 
-
 ### Fragment Shaders
 
 For fragment shaders, I am ignoring a few things:
@@ -92,46 +74,6 @@ Builtins:
 let @frag.coord: f2;
 let @frag.front_facing: b;
 
-## Types
-
-Yuri is statically typed. It does not have as many types as GLSL or HLSL,
-and certainly doesn't have as many as SPIR-V. No weird matrices, no half-floats.
-
-- boolean
-  - `bool` or `b`?
-- `sampler`
-  - don't want to abbreviate this
-- unit
-  - can't be stored in a variable
-  - can't be passed as an argument to a function
-  - the same rules apply to arrays of units (including nesting them)
-- scalar types:
-  - signed/unsigned integers, two's complement 32 bits etc.
-    - `i`/`u`
-  - 32-bit floats, IEEE 754
-    - `f`
-    - no double types, we can live without them
-- 2/3/4 component vectors of the scalar types
-  - TN (`u2`, `i3`, `f4`)
-- arrays (fixed-size)
-  - T\[N\] (C-style array)
-- square matrices
-  - mN (`m2`, `m3`, `m4`)
-  - not sure how to do literals for this.
-    - highjack complex type literals?
-    - what if you just use function syntax?
-      - constructor functions would definitely simplify scalar primitives
-- functions are NOT types. sorry
-
-## Functions
-
-Functions are NOT first-class data.
-
-## Variables
-
-all variables are immutable, and are declared with `let`.
-Type annotations are optional.
-
 ## Operators
 
 - Arithmetic
@@ -141,99 +83,22 @@ Type annotations are optional.
     - `%`
 - Logical
   - and, xor, or, not
-    - these are all keywords
+    - keywords vs fancy operators?
   - eq, neq, gt, ge, lt, le
     - `==`, `!=`, `>`, `>=`, `<`, `<=`
 - Mathematical
-  - they all start with `m.`
-  - m.sin()
-  - m.cos()
+  - Math is important, so it's part of the language core. 
+  - `sin`/`cos`/`tan`/`csc`/`sec`/`cot`
+  - arc tangents are harder
 
 ## Control flow
 
 - block expression
   - we just re-order assignment and evaluation at the assembly level
 - switch expression
+  - how to handle non-integer types? (maybe _don't?_) 
   - spv has it natively
 - `loop`/`fold`/`map`/`filter`
-  - I would like the entire language to be immutable,
-    so ideally we can initialize arrays in a granular way
-  - `loop`: a loop with an expression as the tail,
-    initialize an array with the iteration count.
-  - `filter`
-
-```yuri
-# [ 0, 1, 2, 3 ];
-let arr: u[4] = loop 4 {
-  $
-};
-```
-
 - `if` expression
-  - `if ([COND]) {}`, `if ([COND]) {} else {}`
-- match expression
-  - just a switch statement, ideally nothing fancy
-
-# Usage
-
-# Syntax Drafts
-
-## 2
-```yuri
-frag;
-
-# this function 
-in f 
-
-# This is a uniform.
-prop time: f;
-
-fn rand(n: f): f {
-  m.fract(m.sin(n) * 43758.5453123)
-}
-
-fn noise(p: f): f{
-  let fl: f = m.floor(p);
-  let fc: f = m.fract(p);
-  m.mix(m.rand(fl), rand(fl + 1.0), fc)
-}
-
-@vert fn vertex_main(position: f2, tex_coord: f3, vertex_color: f4): f4 {
-    # not sure how I want to handle constructors yet
-    f4(position.x, position.y, 0.0, 1.0)
-}
-
-@frag fn fragment_main(tex_coord: f3, vertex_color: f4): f4 {
-    f4(tex_coord, 1.0)
-}
-
-```
-
-## 1
-```yuri
-
-# yuri_basic_full.gl
-
-# This is a uniform.
-prop time: f;
-
-fn rand(n: f): f {
-  m.fract(m.sin(n) * 43758.5453123)
-}
-
-fn noise(p: f): f{
-  let fl: f = m.floor(p);
-  let fc: f = m.fract(p);
-  m.mix(m.rand(fl), rand(fl + 1.0), fc)
-}
-
-@vert fn vertex_main(position: f2, tex_coord: f3, vertex_color: f4): f4 {
-    # not sure how I want to handle constructors yet
-    f4(position.x, position.y, 0.0, 1.0)
-}
-
-@frag fn fragment_main(tex_coord: f3, vertex_color: f4): f4 {
-    f4(tex_coord, 1.0)
-}
-
-```
+- FUTURE:`switch` expression
+  - `switch (VAL)`

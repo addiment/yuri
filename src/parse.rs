@@ -4,14 +4,20 @@
 // Float = any float literal
 // Number = Unsigned|Signed|Float
 // WS = whitespace/comments
-// Ident = any valid identifier (including the primitive types and member access)
-// Array = K + WS? + "[" + WS? + (Unsigned|Ident) + WS? + "]"
+// Ident = any valid identifier (including the primitive types and ".")
+// Array = Type + WS? + "[" + WS? + (Unsigned|Ident) + WS? + "]"
 // Complex = "<|" + WS? + Ident + WS? + ":" + WS? + Type + WS? + "|>"
 // Type = Primitive|Array|Complex|Ident
 // Property = "prop" + WS + Ident + WS? + ":" + WS? + Type
 // Variable = ("export" + WS)? + "let" + WS + Ident + WS? + (":" + WS? + Type)? + WS? + "=" + WS? + Expression + WS?
+// Function = "fn" + WS + Ident + WS? + "(" + WS? + ((Ident + WS? ":" + ) + ",")* + ")" + WS? + (":" + WS? + Type)? + WS? + Block
 // Block = "{" + WS? + (Statement + WS?)* + WS? + (Statement|Expression)? + WS? +"}"
-// Expression = Ident|Block|Literal
+// BinarySymbolOperator = "*"|"/"|"+"|"-"|"%"|"**"
+// BinaryKeywordOperator = "and"|"xor"|"or"
+// BinaryExpression = Expression + ((WS? + BinaryMathOperator + WS?)|(WS + BinaryKeywordOperator + WS)) + Expression
+// UnaryOperator = "!"|"-"
+// UnaryExpression = UnaryOperator + WS? + Expression
+// Expression = Ident|Block|Literal|BinaryExpression|UnaryExpression
 // Annotation = "@" + Ident
 // Statement = (Variable|Expression) + ";"
 // Module = "module" + WS + Ident + WS? + "{" + Shader + "}"
@@ -19,6 +25,11 @@
 // Shader = (Declaration|WS)*
 
 // "u"|"i"|"f"|"u2"|"i2"|"f2"|"u3"|"i3"|"f3"|"u4"|"i4"|"f4"|"m2"|"m3"|"m4"
+
+use std::collections::VecDeque;
+use crate::error::{YuriLexError, YuriSemanticError};
+use crate::lex::{Keyword, YuriAst, YuriToken, YuriTokenType};
+use crate::lex::YuriTokenType::Identifier;
 
 #[derive(Debug, Clone)]
 pub enum CompositeSize {
@@ -186,4 +197,46 @@ pub struct YuriModule {
 	properties: Vec<PropertyDeclaration>,
 	globals: Vec<VariableDeclaration>,
 	functions: Vec<FunctionDeclaration>,
+	submodules: Vec<(String, YuriModule)>
+}
+
+pub(super) fn parse_input(ast: &YuriAst) -> Result<YuriModule, YuriSemanticError> {
+	fn parse_input_recursive(ast: &mut VecDeque<YuriToken>, current_module: &mut YuriModule) {
+		let mut annotations = Vec::new();
+		while let Some(mut tok) = ast.pop_front() {
+			if let YuriTokenType::Annotation(ann) = tok.token_type {
+				annotations.push(ann);
+				continue;
+			}
+
+			if let YuriTokenType::Keyword(kw) = tok.token_type {
+				// module declaration
+				if kw == Keyword::Module {
+					let name = if let Some(name) = ast.pop_front() {
+						if let Identifier(name) = name.token_type {
+							name
+						} else {
+							eprintln!("unexpected token (expected module name) {name:?}");
+							break;
+						}
+					} else {
+						break;
+					};
+					let mut submodule = YuriModule::default();
+					// NOTE: this could cause stack overflow
+					// if modules are nested a comically large amount
+					parse_input_recursive(ast, &mut submodule);
+					current_module.submodules.push((name, submodule));
+					continue;
+				}
+
+				let is_exported = kw == Keyword::Export;
+
+			}
+		}
+	}
+	let mut ast = VecDeque::from(ast.clone());
+	let mut module_state = YuriModule::default();
+	parse_input_recursive(&mut ast, &mut module_state);
+	Ok(module_state)
 }

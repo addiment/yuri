@@ -24,11 +24,11 @@ impl YuriShader {
         lex::lex_input(input)
     }
 
-    pub fn parse(input: &YuriAst) -> Result<YuriModule, YuriLexError> {
-        todo!()
+    pub fn parse(input: &YuriAst) -> Result<YuriModule, YuriSemanticError> {
+        parse::parse_input(input)
     }
 
-    pub fn compile(ast: &YuriModule) -> Result<Self, YuriSemanticError> {
+    pub fn compile(_ast: &YuriModule) -> Result<Self, YuriSemanticError> {
         todo!()
     }
 }
