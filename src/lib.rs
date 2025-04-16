@@ -1,9 +1,11 @@
-use crate::error::{YuriCompileError, YuriParseError, YuriSemanticError};
-use crate::parser::{ShaderModule, YuriAst};
+use crate::error::{YuriCompileError, YuriLexError, YuriSemanticError};
+use crate::lex::YuriAst;
+use crate::parse::YuriModule;
 
 pub mod error;
-mod codegen;
-pub mod parser;
+pub mod lex;
+pub mod parse;
+pub mod compile;
 
 pub struct YuriShader {
     
@@ -18,15 +20,15 @@ impl YuriShader {
         Ok(Self::compile(&shader)?)
     }
 
-    pub fn lex(input: &str) -> Result<YuriAst, YuriParseError> {
-        parser::lex(input)
+    pub fn lex(input: &str) -> Result<YuriAst, YuriLexError> {
+        lex::lex_input(input)
     }
 
-    pub fn parse(input: &YuriAst) -> Result<ShaderModule, YuriParseError> {
+    pub fn parse(input: &YuriAst) -> Result<YuriModule, YuriLexError> {
         todo!()
     }
 
-    pub fn compile(ast: &ShaderModule) -> Result<Self, YuriSemanticError> {
+    pub fn compile(ast: &YuriModule) -> Result<Self, YuriSemanticError> {
         todo!()
     }
 }

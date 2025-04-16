@@ -1,10 +1,11 @@
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
+use std::ops::Range;
 
 /// Represents a generic error that occurred while trying to compile a Yuri shader.
 #[derive(Eq, PartialEq)]
 pub enum YuriCompileError {
-	Parse(YuriParseError),
+	Parse(YuriLexError),
 	Semantic(YuriSemanticError)
 }
 
@@ -35,8 +36,8 @@ impl Error for YuriCompileError {
 	}
 }
 
-impl From<YuriParseError> for YuriCompileError {
-	fn from(value: YuriParseError) -> Self {
+impl From<YuriLexError> for YuriCompileError {
+	fn from(value: YuriLexError) -> Self {
 		Self::Parse(value)
 	}
 }
@@ -61,26 +62,35 @@ impl Display for YuriSemanticError {
 
 impl Error for YuriSemanticError {}
 
-/// Represents an error that occurred while parsing the Yuri shader syntax from string input.
-#[derive(Debug, Eq, PartialEq)]
-pub enum YuriParseError {
-	/// Mostly a placeholder value,
-	/// should rarely come up in practice.
-	/// Generated when we have literally NO idea what your code is trying to do.
-	Unknown,
-	InvalidVariableDeclaration(String),
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum YuriLexErrorType {
+	InvalidVariableDeclaration,
 	UnexpectedEndOfFile,
-	InvalidDigit,
 	NumberOutOfBounds,
 	InvalidNumericLiteral,
 	IncompleteAnnotation,
+	UnknownToken,
 }
 
-impl Display for YuriParseError {
+/// Represents an error that occurred while parsing the Yuri shader syntax from string input.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct YuriLexError {
+	pub(crate) error_type: YuriLexErrorType,
+	pub(crate) description: Option<String>,
+	pub(crate) markers: Vec<Range<usize>>,
+}
+
+impl YuriLexError {
+	pub fn error_type(&self) -> YuriLexErrorType {
+		self.error_type
+	}
+}
+
+impl Display for YuriLexError {
 	fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
 		// TODO
 		f.write_fmt(format_args!(""))
 	}
 }
 
-impl Error for YuriParseError {}
+impl Error for YuriLexError {}

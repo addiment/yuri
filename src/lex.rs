@@ -1,167 +1,11 @@
-use std::num::ParseFloatError;
+//! The Yuri lexer/tokenizer module. This was written entirely by hand,
+//! ensuring maximum portability and even maximum-er jank.
 use std::ops::{Neg, Range};
-use crate::error::YuriParseError;
-// our grammar:
-// Unsigned = any unsigned integer literal
-// Signed = any signed integer literal
-// Float = any float literal
-// Number = Unsigned|Signed|Float
-// WS = whitespace/comments
-// Ident = any valid identifier (including the primitive types and member access)
-// Array = K + WS? + "[" + WS? + (Unsigned|Ident) + WS? + "]"
-// Complex = "<|" + WS? + Ident + WS? + ":" + WS? + Type + WS? + "|>"
-// Type = Primitive|Array|Complex|Ident
-// Property = "prop" + WS + Ident + WS? + ":" + WS? + Type
-// Variable = ("export" + WS)? + "let" + WS + Ident + WS? + (":" + WS? + Type)? + WS? + "=" + WS? + Expression + WS?
-// Block = "{" + WS? + (Statement + WS?)* + WS? + (Statement|Expression)? + WS? +"}"
-// Expression = Ident|Block|Literal
-// Annotation = "@" + Ident
-// Statement = (Variable|Expression) + ";"
-// Module = "module" + WS + Ident + WS? + "{" + Shader + "}"
-// Declaration = (Variable|Property|Function|Import|Module) + ";"
-// Shader = (Declaration|WS)*
+use crate::error::{YuriLexError, YuriLexErrorType};
 
-// "u"|"i"|"f"|"u2"|"i2"|"f2"|"u3"|"i3"|"f3"|"u4"|"i4"|"f4"|"m2"|"m3"|"m4"
+type Input<'a> = &'a[char];
 
-#[derive(Debug, Clone)]
-pub enum CompositeSize {
-	Two,
-	Three,
-	Four
-}
-
-#[derive(Debug, Clone)]
-pub enum NumberType {
-	Float,
-	Signed,
-	Unsigned,
-}
-
-#[derive(Debug, Clone)]
-pub enum YuriType {
-	Unit,
-	Scalar(NumberType),
-	Vector(NumberType, CompositeSize),
-	Array(Box<YuriType>, usize),
-	Complex(Vec<(String, YuriType)>)
-}
-
-// "if" statements are incredibly annoying syntactically.
-// I wish I could put this inside an enum variant, but I need two extra structs!
-#[derive(Debug, Clone)]
-struct IfExpression {
-	condition: Box<Expression>,
-	block: Vec<Statement>,
-	block_else: Option<Else>,
-}
-
-#[derive(Debug, Clone)]
-enum Else {
-	Block(Vec<Statement>),
-	If(Box<IfExpression>),
-}
-
-#[derive(Debug, Clone)]
-enum Literal {
-	DecimalNumber(i64),
-	HexNumber(i64),
-	BinaryNumber(i64),
-	FloatNumber(f32),
-	Boolean(bool),
-	Vector {
-		dimensions: CompositeSize,
-		contents: Vec<Expression>,
-	},
-	Matrix {
-		dimensions: CompositeSize,
-		contents: Vec<Expression>,
-	},
-	Array {
-		array_type: YuriType,
-		contents: Vec<Expression>,
-	},
-}
-
-#[derive(Debug, Clone)]
-enum Expression {
-	Literal(Literal),
-	Variable(String),
-	FunctionCall {
-		function_name: String,
-		arguments: Vec<Expression>
-	},
-	Block(Vec<Statement>),
-	If(IfExpression),
-	Loop {
-		count: Box<Expression>,
-		block: Vec<Statement>,
-	},
-	Fold {
-		initial: Box<Expression>,
-		items: Box<Expression>,
-		block: Vec<Statement>
-	},
-	Map {
-		initial: Box<Expression>,
-		block: Vec<Statement>
-	},
-	Filter {
-		initial: Box<Expression>,
-		block: Vec<Statement>
-	},
-}
-
-#[derive(Debug, Clone)]
-struct VariableDeclaration {
-	name: String,
-	explicit_type: Option<YuriType>,
-	inferred_type: Option<YuriType>,
-	value: Expression,
-	exported: bool,
-}
-
-/// A statement is a syntax element that can only occur in blocks.
-#[derive(Debug, Clone)]
-enum Statement {
-	Expression(Expression),
-	Variable(VariableDeclaration),
-	Return(Expression),
-}
-
-#[derive(Debug, Clone)]
-enum BinaryOperator {
-	Plus,
-	Minus,
-	Times,
-	Divided,
-	Exponent,
-}
-
-#[derive(Debug, Clone)]
-enum UnaryOperator {
-	Negate,
-	Not,
-}
-
-#[derive(Debug, Clone)]
-enum Operator {
-	Unary(UnaryOperator),
-	Binary(BinaryOperator),
-}
-
-// impl Operator {
-// 	fn precedence(&self) -> u8 {
-// 		match self {
-// 			Operator::Unary(op) => match op {
-// 				UnaryOperator::Negate => {}
-// 				UnaryOperator::Not => {}
-// 			},
-// 			Operator::Binary(op) => match op {
-//
-// 			},
-// 		}
-// 	}
-// }
+pub type YuriAst = Vec<YuriToken>;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Keyword {
@@ -307,7 +151,8 @@ impl YuriToken {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum YuriTokenType {
-	Unknown,
+	/// A token that we can't fully recognize, usually caused by an error.
+	Unknown(YuriLexError),
 	/// (
 	OpenParen,
 	/// )
@@ -332,6 +177,8 @@ pub enum YuriTokenType {
 	Assignment,
 	/// :
 	TypeHint,
+	/// ?
+	Optional,
 
 	HexNumber(u32),
 	BinaryNumber(u32),
@@ -345,57 +192,18 @@ pub enum YuriTokenType {
 	Operator(String),
 }
 
-#[derive(Debug, Clone)]
-struct FunctionDeclaration {
-	name: String,
-	return_type: YuriType,
-	arguments: Vec<(String, YuriType)>,
-	exported: bool,
-}
-
-#[derive(Debug, Clone)]
-struct PropertyDeclaration {
-	name: String,
-	property_type: YuriType,
-}
-
-#[derive(Debug, Clone)]
-struct ImportDeclaration {
-	module: String,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct ShaderModule {
-	imports: Vec<ImportDeclaration>,
-	properties: Vec<PropertyDeclaration>,
-	globals: Vec<VariableDeclaration>,
-	functions: Vec<FunctionDeclaration>,
-}
-
-type Input<'a> = &'a[char];
-
-pub type YuriAst = Vec<YuriToken>;
-
-fn get_or_eof(input: Input, seek: usize) -> Result<char, YuriParseError> {
-	match input.get(seek) {
-		None => Err(YuriParseError::UnexpectedEndOfFile),
-		Some(ch) => Ok(*ch)
-	}
-}
-
-
 /// This function is an affront to god. But so are lesbians, so it doesn't really matter.
 /// I am afraid to split this up into multiple other functions because
 /// of how the pieces all fit together. I totally could, but it's fine like this.
-fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseError> {
+fn take_token(input: Input, seek: &mut usize) -> YuriToken {
 	let initial_seek = *seek;
 	let tt = match input[*seek] {
 		'(' => { *seek += 1; YuriTokenType::OpenParen },
 		')' => { *seek += 1; YuriTokenType::CloseParen },
-		'{' => { *seek += 1; YuriTokenType::OpenParen },
-		'}' => { *seek += 1; YuriTokenType::CloseParen },
-		'[' => { *seek += 1; YuriTokenType::OpenParen },
-		']' => { *seek += 1; YuriTokenType::CloseParen },
+		'{' => { *seek += 1; YuriTokenType::OpenBrace },
+		'}' => { *seek += 1; YuriTokenType::CloseBrace },
+		'[' => { *seek += 1; YuriTokenType::OpenSquare },
+		']' => { *seek += 1; YuriTokenType::CloseSquare },
 		':' => { *seek += 1; YuriTokenType::TypeHint },
 		';' => { *seek += 1; YuriTokenType::Terminator },
 		',' => { *seek += 1; YuriTokenType::Separator },
@@ -404,6 +212,8 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 		'/' => { *seek += 1; YuriTokenType::Operator(String::from("/")) }
 		'^' => { *seek += 1; YuriTokenType::Operator(String::from("^")) }
 		'!' => { *seek += 1; YuriTokenType::Operator(String::from("!")) }
+		'%' => { *seek += 1; YuriTokenType::Operator(String::from("%")) }
+		'?' => { *seek += 1; YuriTokenType::Optional }
 
 		'|' => {
 			*seek += 1;
@@ -442,6 +252,7 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 			}
 		},
 		'-' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+			let earliest_seek = *seek;
 			// this control flow is really annoying to model without repetition.
 			let ch = input[*seek];
 
@@ -450,9 +261,11 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 					if next.is_digit(10) {
 						None
 					} else {
+						*seek += 1;
 						Some(YuriTokenType::Operator(String::from("-")))
 					}
 				} else {
+					*seek += 1;
 					Some(YuriTokenType::Operator(String::from("-")))
 				}
 			} else {
@@ -460,10 +273,9 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 			};
 			let special_number_formats = if ch == '0' {
 				match input.get(*seek + 1) {
-					// EOF
-					None => Some(YuriTokenType::UnsignedNumber(0)),
 					// hex number
 					Some('x') => {
+						let hex_start_seek = *seek;
 						*seek += 2;
 						let mut digits = Vec::new();
 
@@ -484,7 +296,14 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 						};
 
 						if digits.is_empty() {
-							return Err(YuriParseError::InvalidDigit);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::InvalidNumericLiteral,
+									description: Some("0 or more digits must follow a hexadecimal literal prefix (written %)".to_string()),
+									markers: vec![hex_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						}
 
 						let mut sum: i64 = 0;
@@ -499,11 +318,19 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 						Some(if let Ok(sum) = u32::try_from(sum) {
 							YuriTokenType::HexNumber(sum)
 						} else {
-							return Err(YuriParseError::NumberOutOfBounds);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::NumberOutOfBounds,
+									description: Some("The hexadecimal number % can't be stored in a 32-bit unsigned integer value.".to_string()),
+									markers: vec![hex_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						})
 					}
 					// binary number
 					Some('b') => {
+						let binary_start_seek = *seek;
 						*seek += 2;
 						let mut digits = Vec::<bool>::new();
 						while let Some(ch) = input.get(*seek) {
@@ -520,9 +347,23 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 							}
 						};
 						if digits.is_empty() {
-							return Err(YuriParseError::InvalidNumericLiteral);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::InvalidNumericLiteral,
+									description: Some("0 or more digits must follow a binary literal prefix (written %)".to_string()),
+									markers: vec![binary_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						} else if digits.len() > 32 {
-							return Err(YuriParseError::NumberOutOfBounds);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::NumberOutOfBounds,
+									description: Some("The binary number % can't be stored in a 32-bit unsigned integer value.".to_string()),
+									markers: vec![binary_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						}
 						let mut sum = 0;
 						for i in 0..digits.len() {
@@ -532,6 +373,8 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 						}
 						Some(YuriTokenType::BinaryNumber(sum))
 					}
+					// EOF
+					None => { *seek += 1; Some(YuriTokenType::UnsignedNumber(0)) },
 					_ => None,
 				}
 			} else { None };
@@ -553,7 +396,14 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 						*seek += 1;
 					} else if *ch == '.' {
 						if decimal_point.is_some() {
-							return Err(YuriParseError::InvalidNumericLiteral);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::InvalidNumericLiteral,
+									description: Some("More than one decimal point found in numeric literal (first is %, next is %)".to_string()),
+									markers: vec![*seek..(*seek + 1), number_start_seek..(number_start_seek + 1)],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						}
 						decimal_point = Some(digits.len());
 						*seek += 1;
@@ -569,10 +419,6 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 					}
 				};
 
-				if digits.is_empty() {
-					return Err(YuriParseError::InvalidDigit);
-				}
-
 				if let Some(_) = decimal_point {
 					let strung = input[number_start_seek..*seek]
 						.iter()
@@ -586,7 +432,14 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 							num
 						}),
 						Err(_) => {
-							return Err(YuriParseError::NumberOutOfBounds);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::NumberOutOfBounds,
+									description: Some("The number % can't be stored in a 32-bit floating-point value.".to_string()),
+									markers: vec![number_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						}
 					}
 				} else {
@@ -603,13 +456,27 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 						if let Ok(sum) = i32::try_from(sum * -1) {
 							YuriTokenType::SignedNumber(sum)
 						} else {
-							return Err(YuriParseError::NumberOutOfBounds);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::NumberOutOfBounds,
+									description: Some("The number % can't be stored in a 32-bit signed integer value.".to_string()),
+									markers: vec![number_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						}
 					} else {
 						if let Ok(sum) = u32::try_from(sum) {
 							YuriTokenType::UnsignedNumber(sum)
 						} else {
-							return Err(YuriParseError::NumberOutOfBounds);
+							return YuriToken::new(
+								YuriTokenType::Unknown(YuriLexError {
+									error_type: YuriLexErrorType::NumberOutOfBounds,
+									description: Some("The number % can't be stored in a 32-bit unsigned integer value.".to_string()),
+									markers: vec![number_start_seek..*seek],
+								}),
+								earliest_seek..(*seek + 1)
+							);
 						}
 					}
 				}
@@ -639,7 +506,14 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 				*seek += 1;
 				let annotation = take_ident(input, seek);
 				if annotation.is_none() {
-					return Err(YuriParseError::IncompleteAnnotation);
+					return YuriToken::new(
+						YuriTokenType::Unknown(YuriLexError {
+							error_type: YuriLexErrorType::IncompleteAnnotation,
+							description: Some("The annotation % is missing a proper identifier".to_string()),
+							markers: vec![*seek..(*seek + 1)],
+						}),
+						*seek - 1..(*seek + 1)
+					);
 				}
 				YuriTokenType::Annotation(annotation.unwrap())
 			} else if let Some(ident) = take_ident(input, seek) {
@@ -650,49 +524,46 @@ fn take_token(input: Input, seek: &mut usize) -> Result<YuriToken, YuriParseErro
 				}
 			} else {
 				*seek += 1;
-				YuriTokenType::Unknown
+				// TODO: do a greedy check of this by recursively calling take_token until we stop,
+				//		 that would prevent a chain of errors caused by a sequence of weird chars
+				YuriTokenType::Unknown(YuriLexError {
+					error_type: YuriLexErrorType::UnknownToken,
+					description: Some(format!("Unexpected/unknown character \'{ch}\' %")),
+					markers: vec![*seek..(*seek + 1)],
+				})
 			}
 		}
 	};
-	Ok(YuriToken::new(tt, initial_seek..*seek))
+	YuriToken::new(tt, initial_seek..*seek)
 }
 
-pub fn lex(input_string: &str) -> Result<YuriAst, YuriParseError> {
+pub(super) fn lex_input(input_string: &str) -> Result<YuriAst, YuriLexError> {
 	let mut ast = YuriAst::new();
 	let input: Vec<char> = input_string.chars().collect();
 	let mut seek = take_whitespace(&input, 0, false)?;
 	while seek < input.len() {
 		let tok = take_token(&input, &mut seek);
-		if tok.is_err() {
-			eprintln!("error while parsing, seek = {seek}");
-			tok?;
-			unreachable!()
-		}
-		let tok = tok?;
+		let tok = tok;
 		ast.push(tok);
 
 		seek = take_whitespace(&input, seek, false)?;
 	}
-
 	Ok(ast)
 }
 
 /// Moves the seek forward until it hits a non-whitespace token.
 /// If the function encounters comments, it will treat them as whitespace.
-/// Block comments will generate a parse error if they are not terminated before EOF.
+/// Block comments will generate a lex error if they are not terminated before EOF.
 /// Will return true if once it hits
-fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<usize, YuriParseError> {
-	// ParseHesitation::EndOfFile
+fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<usize, YuriLexError> {
 	while seek < input.len() {
 		let ch = input[seek];
 		if ch.is_whitespace() {
 			// keep going.
 			// safe since we know there's at least 1 char
 			seek += 1;
-			// println!("took \'{}\'", ch.escape_default());
 			continue;
 		} else if ch == '#' {
-			// println!("took comment start");
 			seek += 1;
 
 			// edge case where we have a hash at the VERY END of the file.
@@ -700,35 +571,42 @@ fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<u
 			// it's technically valid though so let's make sure we validate it
 			let next = if let Some(next) = input.get(seek) {
 				*next
-			} else if fail_on_eof {
-				return Err(YuriParseError::UnexpectedEndOfFile)
 			} else {
 				return Ok(input.len())
 			};
 			// comment, line or block?
-			// println!("took next \'{}\'", next.escape_default());
 			if next == '#' {
+				let block_comment_start = seek;
 				seek += 1;
-				// println!("taking block comment");
 				// block comment
+				static ERROR_STRING: &str = "Missing closing block for block comment (started %). Add `##` to the end of the comment/file to fix this.";
 				loop {
-					// println!("in block comment; 0 is \'{}\'", input[0].escape_default());
 					if let Some(end_pos) = input.iter()
 						.skip(seek)
 						.position(|c| *c == '#') {
 						seek += end_pos + 1;
 					} else {
 						// EOF
-						return Err(YuriParseError::UnexpectedEndOfFile);
+						return Err(YuriLexError {
+							error_type: YuriLexErrorType::UnexpectedEndOfFile,
+							description: Some(ERROR_STRING.to_string()),
+							markers: vec![block_comment_start..block_comment_start + 2],
+						});
 					};
-					// println!("in block comment; seeking {end_pos} forward");
+
 					// we seek to the position where we found the next hash.
 					// note that this is NOT the character after,
 					// we account for that when we assign the next character
-					let next = get_or_eof(input, seek)?;
+					let next = match input.get(seek) {
+						None => return Err(YuriLexError {
+							error_type: YuriLexErrorType::UnexpectedEndOfFile,
+							description: Some(ERROR_STRING.to_string()),
+							markers: vec![block_comment_start..block_comment_start + 2],
+						}),
+						Some(ch) => *ch
+					};
 
 					if next == '#' {
-						// println!("ending");
 						// move the seek to after the block comment ends,
 						// or else we'll interpret it as the beginning of another comment.
 						seek += 1;
@@ -742,11 +620,7 @@ fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<u
 					.position(|c| *c == '\n');
 				match end_pos {
 					// EOF
-					None => return if fail_on_eof {
-						Err(YuriParseError::UnexpectedEndOfFile)
-					} else {
-						Ok(input.len())
-					},
+					None => return Ok(input.len()),
 					Some(index) => {
 						// note that end_pos is relative here;
 						// the indices we just skipped we need to add back.
@@ -761,17 +635,13 @@ fn take_whitespace(input: Input, mut seek: usize, fail_on_eof: bool) -> Result<u
 			return Ok(seek);
 		}
 	}
-	if fail_on_eof {
-		Err(YuriParseError::UnexpectedEndOfFile)
-	} else {
-		Ok(seek)
-	}
+	Ok(seek)
 }
 
 #[cfg(test)]
 mod test {
-	use crate::error::YuriParseError;
-	use crate::parser::{take_whitespace, YuriTokenType};
+	use crate::error::{YuriLexError, YuriLexErrorType};
+	use crate::lex::{take_whitespace, YuriTokenType};
 	use crate::YuriShader;
 
 	fn cvc(s: &str) -> Vec<char> {
@@ -858,9 +728,10 @@ mod test {
 		] {
 			println!("! testing \"{}\"", s.escape_default());
 			let input = cvc(s);
+			let take = take_whitespace(&input, 0, false);
 			assert_eq!(
-				take_whitespace(&input, 0, false),
-				Err(YuriParseError::UnexpectedEndOfFile),
+				take.unwrap_err().error_type,
+				YuriLexErrorType::UnexpectedEndOfFile,
 				"input was \"{}\"", s.escape_default()
 			);
 		}

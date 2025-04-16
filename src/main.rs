@@ -3,6 +3,7 @@ extern crate core;
 use std::env::args;
 use std::fs;
 use std::process::ExitCode;
+use yuri::lex::YuriTokenType;
 use yuri::YuriShader;
 
 fn main() -> ExitCode {
@@ -21,11 +22,18 @@ fn main() -> ExitCode {
 		.expect("failed to read file");
 
 	let ast = YuriShader::lex(&input).unwrap();
+	let ast_string_errors: String = ast.iter()
+		.filter(|tok| match tok.token_type { YuriTokenType::Unknown(_) => true, _ => false })
+		.map(|tok| format!("{tok:?}"))
+		.collect::<Vec<String>>()
+		.join("\n");
 	let ast_string: String = ast.iter()
+		.filter(|tok| match tok.token_type { YuriTokenType::Unknown(_) => false, _ => true })
 		.map(|tok| format!("{tok:?}"))
 		.collect::<Vec<String>>()
 		.join("\n");
 	println!("AST:\n{ast_string}");
+	println!("errors:\n{ast_string_errors}");
 
 	let shader = YuriShader::parse(&ast)
 		.unwrap();
